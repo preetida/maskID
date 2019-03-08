@@ -6,7 +6,7 @@ import numpy as np
 import pysam
 from pysam import VariantFile
 #import scikit-allel
-import allel
+#import allel
 
 
 class masking(object):
@@ -50,25 +50,23 @@ class masking(object):
         ### output : AlignedSegment (modified)
         
         if not self.doesOverlap(varRec,bamAlign):
-            return bamAlign
+            return (bamAlign,False)
+        elif len(varRec.alts) != 1 :
+            return (bamAlign, False)
         else:
             print ("found the overlap with variant")
-            AlIndex=varRec.pos - (bamAlign.reference_end - bamAlign.reference_length + 1)
-
+            AlIndex=(varRec.pos - 1) - (bamAlign.reference_end - bamAlign.reference_length + 1)  
             queryBases=bamAlign.query_sequence
             if queryBases[AlIndex] == varRec.ref :
-                print (" sequences matches with ref ...Wooohoooo!!")
-                return bamAlign
+                return (bamAlign,False)
             elif queryBases[AlIndex] == varRec.alts[0] :
-                queryBases == self.replaceChar(queryBases,varRec.ref,AlIndex)
-                print ("unmasked",bamAlign.query_sequence)
+                queryBases = self.replaceChar(queryBases,varRec.ref,AlIndex)
+                print ("queryBas",queryBases)
                 bamAlign.query_sequence = queryBases
-                #print ("ismasked",bamAlign.query_sequence)
-                print ("ismasked", queryBases)
-                return bamAlign
+                return (bamAlign,True)
             else :
-                print ("all hell broken, get a break ")
-                return bamAlign 
+                print ("Unhandle case for maskvariant")
+                return (bamAlign,False) 
 
     def replaceChar(self,bamSeq,ref,index):
         bamSeq=bamSeq[:index] + ref + bamSeq[index+len(ref):]
@@ -81,15 +79,22 @@ class masking(object):
         pos=varRec.pos
         bamEndPos=bamAlign.reference_end
         bamStartPos= bamEndPos - bamAlign.reference_length
-        
         return (pos >= bamStartPos and pos <= bamEndPos)
 
     def maskAllVariants (self):
         iter= self.Bamfile.fetch()
+        masked_bam=pysam.AlignmentFile("masked.norm.bam", "wb", template=self.Bamfile)
         for x in iter:
+            read = x
             for v in self.Variants :
-                read = self.maskVariant (v,x)
+                ret = self.maskVariant (v,x)
+                b = ret[1]
+                if b :
+                    read = ret[0]
+            masked_bam.write(read)
+        masked_bam.close()
         return 
+
 def main():
     M=masking(sys.argv[1],sys.argv[2])
     M.printMaskVars()
